@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>REA-Lab Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+        onerror="window.__markedFailed=true"></script>
+<style>
+  :root {
+    --bg: #0e1116;
+    --bg2: #161b22;
+    --bg3: #1c2330;
+    --border: #2a3340;
+    --text: #d6dde8;
+    --muted: #8b96a8;
+    --green: #3ecf8e;
+    --amber: #e6b84d;
+    --red: #ef6b6b;
+    --grey: #6b7380;
+    --blue: #6aa9ff;
+    --mono: "Cascadia Mono", "Consolas", "SF Mono", "Menlo", monospace;
+    --drawer-w: min(720px, 92vw);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.45;
+    height: 100%;
+  }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  a { color: var(--blue); }
+  button { font-family: inherit; }
+  .na { color: var(--muted); font-style: italic; padding: 1rem 0; }
+
+  #statusbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-start;
+    padding: 0.65rem 1rem;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  .sb-item { display: flex; align-items: flex-start; gap: 0.5rem; }
+  .sb-label { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--grey); flex-shrink: 0; margin-top: 4px;
+  }
+  .dot.green { background: var(--green); box-shadow: 0 0 6px rgba(62,207,142,0.5); }
+  .dot.red { background: var(--red); box-shadow: 0 0 6px rgba(239,107,107,0.45); }
+  .progress { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .progress-bar {
+    width: 100px; height: 8px; background: var(--bg3);
+    border: 1px solid var(--border); border-radius: 2px; overflow: hidden;
+  }
+  .progress-bar > i { display: block; height: 100%; background: var(--blue); width: 0%; }
+  .progress-bar.wide { width: 180px; height: 10px; }
+  .counts span { margin-right: 0.45rem; }
+  .c-v { color: var(--green); }
+  .c-u { color: var(--amber); }
+  .c-f { color: var(--red); }
+  .c-s { color: var(--grey); }
+  .stalled { color: var(--amber); margin-left: 0.35rem; }
+
+  #ollama-panel {
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    padding: 0.4rem 1rem 0.65rem;
+    font-size: 12px;
+  }
+  #ollama-panel .models {
+    display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; color: var(--muted);
+  }
+  #ollama-panel .models .loaded { color: var(--text); }
+  #ollama-panel .models .loaded::before {
+    content: ""; display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--green); margin-right: 0.35rem;
+    vertical-align: middle;
+  }
+  #ollama-panel .expiry { color: var(--amber); margin-left: 0.35rem; }
+
+  main {
+    padding: 1rem; flex: 1; display: flex; flex-direction: column; gap: 1.25rem;
+    max-width: 1400px; width: 100%; margin: 0 auto;
+  }
+
+  .tabs, .subtabs {
+    display: flex; flex-wrap: wrap; gap: 0.35rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.35rem;
+  }
+  .subtabs { margin-bottom: 0.75rem; border-bottom-style: dashed; }
+  .tab, .subtab {
+    background: transparent; border: 1px solid transparent;
+    color: var(--muted); padding: 0.4rem 0.75rem; cursor: pointer;
+    font-size: inherit; border-radius: 3px 3px 0 0;
+  }
+  .tab:hover, .subtab:hover { color: var(--text); background: var(--bg3); }
+  .tab.active, .subtab.active {
+    color: var(--text); background: var(--bg3);
+    border-color: var(--border); border-bottom-color: var(--bg3);
+  }
+  .reset-btn {
+    margin-left: auto; align-self: center;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 3px;
+    padding: 0.3rem 0.65rem; cursor: pointer; font-size: 12px;
+  }
+  .reset-btn:hover { color: #ff6b6b; border-color: #ff6b6b; }
+  .badge {
+    display: inline-block; margin-left: 0.4rem;
+    padding: 0.05rem 0.35rem; border-radius: 2px;
+    font-size: 10px; text-transform: uppercase;
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.study { color: var(--blue); border-color: #2a4a6a; }
+  .badge.mod { color: var(--amber); border-color: #6a5520; }
+  .badge.decomp { color: var(--green); border-color: #2a5a40; }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.85rem 1rem;
+  }
+  .panel h2 {
+    margin: 0 0 0.75rem; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+  }
+  .section { margin-bottom: 1.25rem; }
+  .section h3 {
+    margin: 0 0 0.5rem; font-size: 12px; color: var(--text);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .count-summary { color: var(--muted); margin-bottom: 0.6rem; font-size: 12px; }
+  .count-summary b { color: var(--text); font-weight: 500; }
+
+  .labeler-panel {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.85rem;
+  }
+  .labeler-panel .row { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
+  .labeler-meta { color: var(--muted); font-size: 12px; margin-top: 0.4rem; }
+
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.6rem; align-items: center;
+  }
+  .filters label { color: var(--muted); font-size: 11px; }
+  .filters select {
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 2px;
+    font-family: inherit; font-size: 12px; padding: 0.25rem 0.4rem;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td {
+    text-align: left; padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  th {
+    color: var(--muted); font-weight: 600; cursor: pointer; user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--text); }
+  th .sort-ind { opacity: 0.5; margin-left: 0.2rem; }
+  tr.approved { background: rgba(62, 207, 142, 0.08); }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: var(--bg3); }
+  tr.selected { outline: 1px solid var(--blue); background: rgba(106, 169, 255, 0.08); }
+  .fp-list { color: var(--muted); }
+  .fp-list b { color: var(--text); font-weight: 500; }
+
+  .check {
+    display: inline-block; padding: 0.05rem 0.35rem; border-radius: 2px;
+    font-size: 10px; text-transform: uppercase; border: 1px solid;
+  }
+  .check.verified { color: var(--green); border-color: var(--green); }
+  .check.unverified { color: var(--amber); border-color: var(--amber); }
+  .check.failed { color: var(--red); border-color: var(--red); }
+  .check.skipped, .check.not_labeled { color: var(--grey); border-color: var(--grey); }
+  .check.other { color: var(--muted); border-color: var(--border); }
+
+  .notes-body { line-height: 1.55; }
+  .notes-body .hl-confirmed { color: var(--green); font-weight: 600; }
+  .notes-body .hl-likely { color: var(--amber); font-weight: 600; }
+  .notes-body .hl-unknown { color: var(--grey); font-weight: 600; }
+  .notes-body pre, .md-fallback {
+    white-space: pre-wrap; background: var(--bg); padding: 0.75rem;
+    border: 1px solid var(--border); border-radius: 3px; overflow-x: auto;
+  }
+  .notes-body h1, .notes-body h2, .notes-body h3 { color: var(--text); }
+  .notes-body code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 2px; }
+
+  #activity-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+  #activity-list li {
+    padding: 0.4rem 0; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: 11rem 8rem 1fr; gap: 0.75rem;
+  }
+  #activity-list .ts { color: var(--muted); }
+  #activity-list .ev { color: var(--blue); }
+
+  details.setup { border: 1px solid var(--border); border-radius: 4px; background: var(--bg2); }
+  details.setup > summary {
+    cursor: pointer; padding: 0.75rem 1rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.07em; font-size: 12px; font-weight: 600;
+  }
+  details.setup[open] > summary { border-bottom: 1px solid var(--border); }
+  details.setup .setup-body { padding: 0.85rem 1rem; }
+  .trunc-banner {
+    background: #3a2a10; color: var(--amber); padding: 0.35rem 1rem;
+    border-bottom: 1px solid #5a4020; font-size: 11px;
+  }
+
+  /* Method detail drawer */
+  #drawer-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40;
+  }
+  #drawer-backdrop.open { display: block; }
+  #drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: var(--drawer-w);
+    background: var(--bg2); border-left: 1px solid var(--border);
+    z-index: 50; transform: translateX(100%); transition: transform 0.15s ease;
+    display: flex; flex-direction: column;
+  }
+  #drawer.open { transform: translateX(0); }
+  #drawer header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+  }
+  #drawer header h2 {
+    margin: 0; flex: 1; font-size: 13px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #drawer-close {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 0.25rem 0.55rem; cursor: pointer; border-radius: 2px;
+  }
+  #drawer-close:hover { color: var(--text); }
+  #drawer-body {
+    flex: 1; overflow: auto; display: grid;
+    grid-template-columns: 1fr 1fr; gap: 0;
+  }
+  @media (max-width: 800px) {
+    #drawer-body { grid-template-columns: 1fr; }
+  }
+  .drawer-col {
+    padding: 0.75rem; border-right: 1px solid var(--border);
+    min-height: 0; overflow: auto;
+  }
+  .drawer-col:last-child { border-right: none; }
+  .drawer-col h3 {
+    margin: 0 0 0.5rem; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted);
+  }
+  .label-block { margin-bottom: 0.65rem; }
+  .label-block .k { color: var(--muted); font-size: 11px; }
+  .label-block .v { color: var(--text); white-space: pre-wrap; }
+  .evidence-note {
+    background: #3a2a10; color: var(--amber); padding: 0.5rem 0.65rem;
+    border: 1px solid #5a4020; border-radius: 3px; margin: 0.5rem 0; font-size: 12px;
+  }
+  .src {
+    margin: 0; font-family: var(--mono); font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+    overflow: auto; max-height: calc(100vh - 8rem);
+  }
+  .src table { border-collapse: collapse; width: 100%; }
+  .src td { border: none; padding: 0 0.5rem; vertical-align: top; }
+  .src .ln {
+    color: var(--grey); text-align: right; user-select: none;
+    width: 1%; white-space: nowrap; padding-right: 0.75rem;
+  }
+  .src .code { white-space: pre; color: var(--text); }
+  .src .hl-evidence {
+    background: rgba(230, 184, 77, 0.28);
+    outline: 1px solid rgba(230, 184, 77, 0.5);
+  }
+</style>
+</head>
+<body>
+<div id="trunc-banner" class="trunc-banner" style="display:none">Response truncated to stay under size cap.</div>
+<div id="statusbar">
+  <div class="sb-item" id="sb-ollama">
+    <span class="dot" id="ollama-dot"></span>
+    <div>
+      <div class="sb-label">Ollama</div>
+      <div id="ollama-text">checking…</div>
+    </div>
+  </div>
+  <div class="sb-item" id="sb-labeler">
+    <div>
+      <div class="sb-label">Labeler</div>
+      <div id="labeler-text">not available yet</div>
+    </div>
+  </div>
+  <div class="sb-item" id="sb-claude">
+    <div>
+      <div class="sb-label">Claude Code</div>
+      <div id="claude-text">no activity logged</div>
+    </div>
+  </div>
+  <div class="sb-item" style="margin-left:auto">
+    <div>
+      <div class="sb-label">Updated</div>
+      <div id="generated-at">—</div>
+    </div>
+  </div>
+</div>
+<div id="ollama-panel">
+  <div class="sb-label" style="margin-bottom:0.3rem">Installed models</div>
+  <div id="ollama-models" class="models"><span class="na" style="padding:0">not available yet</span></div>
+</div>
+
+<main>
+  <section>
+    <div class="tabs" id="target-tabs"></div>
+    <div class="panel" id="target-panel">
+      <div class="na" id="no-targets">not available yet</div>
+      <div id="target-subs"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Activity</h2>
+    <div id="activity-empty" class="na">not available yet</div>
+    <ul id="activity-list" style="display:none"></ul>
+  </section>
+
+  <details class="setup" id="setup-details">
+    <summary>Setup log</summary>
+    <div class="setup-body">
+      <div id="setup-empty" class="na">not available yet</div>
+      <div id="setup-body" class="notes-body" style="display:none"></div>
+    </div>
+  </details>
+</main>
+
+<div id="drawer-backdrop"></div>
+<aside id="drawer" aria-hidden="true">
+  <header>
+    <h2 id="drawer-title">Method</h2>
+    <button type="button" id="drawer-close">close</button>
+  </header>
+  <div id="drawer-body">
+    <div class="drawer-col" id="drawer-source"><div class="na">not available yet</div></div>
+    <div class="drawer-col" id="drawer-label"><div class="na">not available yet</div></div>
+  </div>
+</aside>
+
+<script>
+(function () {
+  "use strict";
+
+  const POLL_MS = 3000;
+  const ui = {
+    activeTarget: null,
+    subTab: "candidates", // candidates | functions | summaries | notes
+    candSort: { key: "density_per_1k", dir: -1 },
+    sumFilters: { category: "", confidence: "", check: "" },
+    fnFilters: { className: "", category: "", status: "" },
+    setupOpen: false,
+    detail: null, // { target, exported_file }
+    detailSource: null, // cached { file, text }
+  };
+
+  let lastState = null;
+  let markedReady = false;
+
+  function checkMarked() {
+    markedReady = typeof window.marked !== "undefined" && typeof window.marked.parse === "function" && !window.__markedFailed;
+  }
+  checkMarked();
+  setTimeout(checkMarked, 500);
+
+  function esc(s) {
+    if (s == null) return "";
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function fmtBytes(bytes) {
+    if (!bytes || bytes <= 0) return "0 B";
+    const gb = bytes / (1024 ** 3);
+    if (gb >= 1) return gb.toFixed(1) + " GB";
+    const mb = bytes / (1024 ** 2);
+    if (mb >= 1) return mb.toFixed(0) + " MB";
+    return bytes + " B";
+  }
+
+  function fmtVram(bytes) {
+    if (!bytes || bytes <= 0) return "0 GB";
+    return (bytes / (1024 ** 3)).toFixed(1) + " GB";
+  }
+
+  function parseTime(ts) {
+    if (!ts) return null;
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function relAge(ts) {
+    const d = parseTime(ts);
+    if (!d) return null;
+    const sec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (sec < 60) return sec + "s ago";
+    if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+    if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+    return Math.floor(sec / 86400) + "d ago";
+  }
+
+  function fmtDuration(ms) {
+    if (ms == null || ms < 0 || !isFinite(ms)) return "—";
+    const sec = Math.floor(ms / 1000);
+    if (sec < 60) return sec + "s";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    if (m < 60) return m + "m " + s + "s";
+    const h = Math.floor(m / 60);
+    return h + "h " + (m % 60) + "m";
+  }
+
+  function unloadIn(expiresAt) {
+    const d = parseTime(expiresAt);
+    if (!d) return null;
+    const ms = d.getTime() - Date.now();
+    if (ms <= 0) return "unloads soon";
+    const min = Math.max(1, Math.round(ms / 60000));
+    return "unloads in " + min + " min";
+  }
+
+  function isStalled(status) {
+    if (!status || status.state !== "running") return false;
+    const d = parseTime(status.updated_at);
+    if (!d) return false;
+    return (Date.now() - d.getTime()) > 60000;
+  }
+
+  function skippedCount(st) {
+    if (!st) return 0;
+    if (st.skipped != null) return Number(st.skipped) || 0;
+    return Number(st.too_long) || 0;
+  }
+
+  function checkClass(check) {
+    const c = (check || "other").toLowerCase().replace(/\s+/g, "_");
+    if (["verified", "unverified", "failed", "skipped", "not_labeled"].includes(c)) return c;
+    return "other";
+  }
+
+  function checkBadge(check, label) {
+    const c = checkClass(check);
+    return '<span class="check ' + c + '">' + esc(label != null ? label : (check || "—")) + "</span>";
+  }
+
+  function renderMd(text) {
+    checkMarked();
+    if (markedReady) {
+      try { return window.marked.parse(text); } catch (e) { /* fall through */ }
+    }
+    return '<pre class="md-fallback">' + esc(text) + "</pre>";
+  }
+
+  function highlightConfidenceWords(html) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    const re = /\b(confirmed|likely|unknown)\b/gi;
+    const walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      if (!re.test(node.nodeValue)) { re.lastIndex = 0; continue; }
+      re.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      const s = node.nodeValue;
+      let m;
+      while ((m = re.exec(s)) !== null) {
+        if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+        const span = document.createElement("span");
+        span.className = "hl-" + m[1].toLowerCase();
+        span.textContent = m[0];
+        frag.appendChild(span);
+        last = m.index + m[0].length;
+      }
+      if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+    return wrap.innerHTML;
+  }
+
+  function topFingerprints(fp, n) {
+    if (!fp || typeof fp !== "object") return "";
+    return Object.entries(fp)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, n)
+      .map(([k, v]) => "<b>" + esc(k) + "</b>:" + esc(v))
+      .join(" ");
+  }
+
+  function uniqueValues(items, key) {
+    const set = new Set();
+    for (const it of items) {
+      const v = typeof key === "function" ? key(it) : it[key];
+      if (v != null && v !== "") set.add(String(v));
+    }
+    return Array.from(set).sort();
+  }
+
+  function captureUiFromDom() {
+    const details = document.getElementById("setup-details");
+    ui.setupOpen = details ? details.open : ui.setupOpen;
+    const map = [
+      ["flt-category", "sumFilters", "category"],
+      ["flt-confidence", "sumFilters", "confidence"],
+      ["flt-check", "sumFilters", "check"],
+      ["fn-class", "fnFilters", "className"],
+      ["fn-category", "fnFilters", "category"],
+      ["fn-status", "fnFilters", "status"],
+    ];
+    for (const [id, bag, key] of map) {
+      const el = document.getElementById(id);
+      if (el) ui[bag][key] = el.value;
+    }
+  }
+
+  function etaInfo(st) {
+    const started = parseTime(st.started_at);
+    if (!started) return { elapsed: null, eta: null };
+    const elapsed = Date.now() - started.getTime();
+    const done = Number(st.done) || 0;
+    const total = Number(st.total) || 0;
+    let eta = null;
+    if (done > 0 && total > done && st.state === "running") {
+      const avg = elapsed / done;
+      eta = avg * (total - done);
+    }
+    return { elapsed, eta };
+  }
+
+  function renderStatusBar(state) {
+    const ollama = state.ollama || { reachable: false, loaded: [], installed: [], models: [] };
+    const loaded = ollama.loaded || ollama.models || [];
+    const dot = document.getElementById("ollama-dot");
+    const otext = document.getElementById("ollama-text");
+    dot.className = "dot";
+    if (!ollama.reachable) {
+      dot.classList.add("red");
+      otext.textContent = "unreachable";
+    } else if (!loaded.length) {
+      otext.textContent = "idle (no model loaded)";
+    } else {
+      dot.classList.add("green");
+      otext.textContent = loaded
+        .map((m) => {
+          let s = (m.name || "?") + " · " + fmtVram(m.size_vram_bytes);
+          const u = unloadIn(m.expires_at);
+          if (u) s += " · " + u;
+          return s;
+        })
+        .join(", ");
+    }
+
+    const modelsEl = document.getElementById("ollama-models");
+    const installed = ollama.installed || [];
+    if (!ollama.reachable) {
+      modelsEl.innerHTML = '<span class="na" style="padding:0">not available yet</span>';
+    } else if (!installed.length) {
+      modelsEl.innerHTML = '<span class="na" style="padding:0">no installed models listed</span>';
+    } else {
+      modelsEl.innerHTML = installed
+        .map((m) => {
+          const cls = m.loaded ? "loaded" : "";
+          let s = '<span class="' + cls + '">' + esc(m.name) + " · " + esc(fmtBytes(m.size_bytes));
+          if (m.loaded) {
+            s += " · VRAM " + esc(fmtVram(m.size_vram_bytes));
+            const u = unloadIn(m.expires_at);
+            if (u) s += '<span class="expiry">' + esc(u) + "</span>";
+          }
+          s += "</span>";
+          return s;
+        })
+        .join("");
+    }
+
+    const withStatus = (state.targets || []).filter((t) => t.status_available && t.status && t.status.state);
+    const labelerEl = document.getElementById("labeler-text");
+    if (!withStatus.length) {
+      labelerEl.textContent = "not available yet";
+    } else {
+      labelerEl.innerHTML = withStatus
+        .map((t) => {
+          const st = t.status || {};
+          const total = Number(st.total) || 0;
+          const done = Number(st.done) || 0;
+          const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+          const stall = isStalled(st) ? '<span class="stalled">stalled?</span>' : "";
+          const { elapsed, eta } = etaInfo(st);
+          return (
+            '<div class="progress">' +
+            "<span>" + esc(t.name) + " · " + esc(st.state) + stall + "</span>" +
+            '<span class="progress-bar"><i style="width:' + pct + '%"></i></span>' +
+            "<span>" + done + "/" + total + "</span>" +
+            '<span class="counts">' +
+            '<span class="c-v">v:' + esc(st.verified ?? "–") + "</span>" +
+            '<span class="c-u">u:' + esc(st.unverified ?? "–") + "</span>" +
+            '<span class="c-f">f:' + esc(st.failed ?? "–") + "</span>" +
+            '<span class="c-s">s:' + esc(skippedCount(st)) + "</span>" +
+            '<span class="c-s">tl:' + esc(st.too_long ?? "–") + "</span>" +
+            "</span>" +
+            (elapsed != null ? "<span>elapsed " + esc(fmtDuration(elapsed)) + "</span>" : "") +
+            (eta != null ? "<span>ETA " + esc(fmtDuration(eta)) + "</span>" : "") +
+            "</div>"
+          );
+        })
+        .join("");
+    }
+
+    const activity = state.activity || [];
+    const claudeEl = document.getElementById("claude-text");
+    if (!activity.length) {
+      claudeEl.textContent = "no activity logged";
+    } else {
+      const newest = activity[activity.length - 1];
+      const age = relAge(newest.ts);
+      claudeEl.textContent = age ? "Claude: active " + age : "Claude: " + (newest.event || "event");
+    }
+
+    document.getElementById("generated-at").textContent = state.generated_at
+      ? new Date(state.generated_at).toLocaleTimeString()
+      : "—";
+    document.getElementById("trunc-banner").style.display = state.truncated ? "block" : "none";
+  }
+
+  function renderLabelerPanel(target) {
+    if (!target.status_available || !target.status || !target.status.state) {
+      return "";
+    }
+    const st = target.status;
+    const total = Number(st.total) || 0;
+    const done = Number(st.done) || 0;
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const stall = isStalled(st) ? '<span class="stalled">stalled?</span>' : "";
+    const { elapsed, eta } = etaInfo(st);
+    return (
+      '<div class="labeler-panel" id="labeler-panel">' +
+      '<div class="row">' +
+      "<div><strong>" + esc(st.state) + "</strong>" + stall +
+      (st.model ? " · " + esc(st.model) : "") + "</div>" +
+      '<span class="progress-bar wide"><i style="width:' + pct + '%"></i></span>' +
+      "<div>" + done + " / " + total + "</div>" +
+      '<div class="counts">' +
+      '<span class="c-v">verified ' + esc(st.verified ?? "–") + "</span>" +
+      '<span class="c-u">unverified ' + esc(st.unverified ?? "–") + "</span>" +
+      '<span class="c-f">failed ' + esc(st.failed ?? "–") + "</span>" +
+      '<span class="c-s">skipped ' + esc(skippedCount(st)) + "</span>" +
+      '<span class="c-s">too_long ' + esc(st.too_long ?? "–") + "</span>" +
+      "</div></div>" +
+      '<div class="labeler-meta">' +
+      (st.current ? "current: " + esc(st.current) + " · " : "") +
+      "elapsed " + esc(fmtDuration(elapsed)) +
+      (eta != null ? " · ETA " + esc(fmtDuration(eta)) : "") +
+      (st.message ? " · " + esc(st.message) : "") +
+      "</div></div>"
+    );
+  }
+
+  function renderActivity(state) {
+    const list = document.getElementById("activity-list");
+    const empty = document.getElementById("activity-empty");
+    const activity = state.activity || [];
+    if (!activity.length) {
+      empty.style.display = "block";
+      list.style.display = "none";
+      list.innerHTML = "";
+      return;
+    }
+    empty.style.display = "none";
+    list.style.display = "block";
+    list.innerHTML = activity
+      .slice()
+      .reverse()
+      .map(
+        (e) =>
+          "<li><span class='ts'>" + esc(e.ts || "") +
+          "</span><span class='ev'>" + esc(e.event || "") +
+          "</span><span class='det'>" + esc(e.detail || "") +
+          "</span></li>"
+      )
+      .join("");
+  }
+
+  function renderSetup(state) {
+    const empty = document.getElementById("setup-empty");
+    const body = document.getElementById("setup-body");
+    const details = document.getElementById("setup-details");
+    details.open = ui.setupOpen;
+    const md = state.setup_log_md;
+    if (md == null || md === "") {
+      empty.style.display = "block";
+      body.style.display = "none";
+      body.innerHTML = "";
+      return;
+    }
+    empty.style.display = "none";
+    body.style.display = "block";
+    body.innerHTML = highlightConfidenceWords(renderMd(md));
+  }
+
+  function sortCandidates(cands) {
+    const { key, dir } = ui.candSort;
+    return cands.slice().sort((a, b) => {
+      let av = a[key], bv = b[key];
+      if (key === "approved") { av = a.approved ? 1 : 0; bv = b.approved ? 1 : 0; }
+      if (typeof av === "string") av = av.toLowerCase();
+      if (typeof bv === "string") bv = bv.toLowerCase();
+      if (av == null) av = 0;
+      if (bv == null) bv = 0;
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }
+
+  function renderCandidates(target) {
+    if (!target.candidates_available || !(target.candidates || []).length) {
+      return '<div class="na">not available yet</div>';
+    }
+    const sorted = sortCandidates(target.candidates);
+    const ind = (k) => (ui.candSort.key === k ? (ui.candSort.dir > 0 ? "▲" : "▼") : "");
+    let html =
+      "<table><thead><tr>" +
+      '<th data-sort="file">file<span class="sort-ind">' + ind("file") + "</span></th>" +
+      '<th data-sort="lines">lines<span class="sort-ind">' + ind("lines") + "</span></th>" +
+      '<th data-sort="total_hits">hits<span class="sort-ind">' + ind("total_hits") + "</span></th>" +
+      '<th data-sort="density_per_1k">density<span class="sort-ind">' + ind("density_per_1k") + "</span></th>" +
+      "<th>top fingerprints</th>" +
+      '<th data-sort="approved">approved<span class="sort-ind">' + ind("approved") + "</span></th>" +
+      "</tr></thead><tbody>";
+    for (const c of sorted) {
+      html +=
+        '<tr class="' + (c.approved ? "approved" : "") + '">' +
+        "<td>" + esc(c.file) + "</td>" +
+        "<td>" + esc(c.lines) + "</td>" +
+        "<td>" + esc(c.total_hits) + "</td>" +
+        "<td>" + esc(c.density_per_1k) + "</td>" +
+        '<td class="fp-list">' + topFingerprints(c.fingerprints, 5) + "</td>" +
+        "<td>" + (c.approved ? "yes" : "no") + "</td></tr>";
+    }
+    return html + "</tbody></table>";
+  }
+
+  function renderFunctions(target) {
+    if (!target.functions_available) {
+      return '<div class="na">not available yet</div>';
+    }
+    const all = target.functions || [];
+    const counts = target.functions_counts || {};
+    if (!all.length) {
+      return '<div class="na">not available yet</div>';
+    }
+
+    const classes = uniqueValues(all, "class");
+    const cats = uniqueValues(all, "category");
+    const statuses = ["verified", "unverified", "failed", "skipped", "not_labeled"];
+
+    let html =
+      '<div class="count-summary">' +
+      "<b>" + esc(counts.exported ?? all.length) + "</b> exported · " +
+      "<b>" + esc(counts.labeled ?? 0) + "</b> labeled · " +
+      '<span class="c-v">' + esc(counts.verified ?? 0) + " verified</span> · " +
+      '<span class="c-u">' + esc(counts.unverified ?? 0) + " unverified</span> · " +
+      '<span class="c-f">' + esc(counts.failed ?? 0) + " failed</span> · " +
+      '<span class="c-s">' + esc(counts.skipped ?? 0) + " skipped</span> · " +
+      '<span class="c-s">' + esc(counts.not_labeled ?? 0) + " not labeled</span>" +
+      "</div>";
+
+    html +=
+      '<div class="filters">' +
+      "<label>class <select id='fn-class'><option value=''>all</option>" +
+      classes.map((c) => "<option value='" + esc(c) + "'" + (ui.fnFilters.className === c ? " selected" : "") + ">" + esc(c) + "</option>").join("") +
+      "</select></label>" +
+      "<label>category <select id='fn-category'><option value=''>all</option>" +
+      cats.map((c) => "<option value='" + esc(c) + "'" + (ui.fnFilters.category === c ? " selected" : "") + ">" + esc(c) + "</option>").join("") +
+      "</select></label>" +
+      "<label>status <select id='fn-status'><option value=''>all</option>" +
+      statuses.map((c) => "<option value='" + esc(c) + "'" + (ui.fnFilters.status === c ? " selected" : "") + ">" + esc(c.replace("_", " ")) + "</option>").join("") +
+      "</select></label></div>";
+
+    const filtered = all.filter((f) => {
+      if (ui.fnFilters.className && String(f.class) !== ui.fnFilters.className) return false;
+      if (ui.fnFilters.category && String(f.category || "") !== ui.fnFilters.category) return false;
+      if (ui.fnFilters.status && String(f.label_status) !== ui.fnFilters.status) return false;
+      return true;
+    });
+
+    html += "<table><thead><tr>" +
+      "<th>class</th><th>method</th><th>lines</th><th>status</th><th>category</th><th>fingerprints</th>" +
+      "</tr></thead><tbody>";
+
+    const sel = ui.detail && ui.detail.target === target.name ? ui.detail.exported_file : null;
+    for (const f of filtered) {
+      const selected = sel && f.exported_file === sel ? " selected" : "";
+      html +=
+        '<tr class="clickable fn-row' + selected + '" data-file="' + esc(f.exported_file) + '">' +
+        "<td>" + esc(f.class) + "</td>" +
+        "<td>" + esc(f.method) + (f.guessed_name ? ' <span style="color:var(--muted)">→ ' + esc(f.guessed_name) + "</span>" : "") + "</td>" +
+        "<td>" + esc(f.start_line) + "–" + esc(f.end_line) + "</td>" +
+        "<td>" + checkBadge(f.label_status, (f.label_status || "").replace("_", " ")) + "</td>" +
+        "<td>" + esc(f.category || "—") + "</td>" +
+        '<td class="fp-list">' + topFingerprints(f.fingerprints, 4) + "</td>" +
+        "</tr>";
+    }
+    html += "</tbody></table>";
+    if (!filtered.length) html += '<div class="na">no rows match filters</div>';
+    return html;
+  }
+
+  function renderSummaries(target) {
+    if (!target.summaries_available || !(target.summaries || []).length) {
+      return '<div class="na">not available yet</div>';
+    }
+    const all = target.summaries || [];
+    const cats = uniqueValues(all, "category");
+    const checks = uniqueValues(all, "check");
+    // Ensure skipped appears in filter even if not yet present
+    if (!checks.includes("skipped")) checks.push("skipped");
+    checks.sort();
+    const confs = uniqueValues(all, "confidence");
+
+    const countByCheck = {};
+    for (const s of all) {
+      const c = (s.check || "other").toLowerCase();
+      countByCheck[c] = (countByCheck[c] || 0) + 1;
+    }
+
+    let html =
+      '<div class="count-summary">' +
+      "<b>" + all.length + "</b> labels · " +
+      '<span class="c-v">' + (countByCheck.verified || 0) + " verified</span> · " +
+      '<span class="c-u">' + (countByCheck.unverified || 0) + " unverified</span> · " +
+      '<span class="c-f">' + (countByCheck.failed || 0) + " failed</span> · " +
+      '<span class="c-s">' + (countByCheck.skipped || 0) + " skipped</span>" +
+      "</div>";
+
+    html +=
+      '<div class="filters">' +
+      "<label>category <select id='flt-category'><option value=''>all</option>" +
+      cats.map((c) => "<option value='" + esc(c) + "'" + (ui.sumFilters.category === c ? " selected" : "") + ">" + esc(c) + "</option>").join("") +
+      "</select></label>" +
+      "<label>confidence <select id='flt-confidence'><option value=''>all</option>" +
+      confs.map((c) => "<option value='" + esc(c) + "'" + (ui.sumFilters.confidence === c ? " selected" : "") + ">" + esc(c) + "</option>").join("") +
+      "</select></label>" +
+      "<label>check <select id='flt-check'><option value=''>all</option>" +
+      checks.map((c) => "<option value='" + esc(c) + "'" + (ui.sumFilters.check === c ? " selected" : "") + ">" + esc(c) + "</option>").join("") +
+      "</select></label></div>";
+
+    const filtered = all.filter((s) => {
+      if (ui.sumFilters.category && String(s.category) !== ui.sumFilters.category) return false;
+      if (ui.sumFilters.confidence && String(s.confidence) !== ui.sumFilters.confidence) return false;
+      if (ui.sumFilters.check && String(s.check) !== ui.sumFilters.check) return false;
+      return true;
+    });
+
+    html += "<table><thead><tr>" +
+      "<th>function</th><th>file</th><th>guessed</th><th>category</th><th>confidence</th><th>check</th><th>summary</th>" +
+      "</tr></thead><tbody>";
+
+    const sel = ui.detail && ui.detail.target === target.name ? ui.detail.exported_file : null;
+    filtered.forEach((s) => {
+      const selected = sel && s.exported_file && s.exported_file === sel ? " selected" : "";
+      html +=
+        '<tr class="clickable sum-row' + selected + '" data-file="' + esc(s.exported_file || "") + '">' +
+        "<td>" + esc(s.function) + "</td>" +
+        "<td>" + esc(s.exported_file || "—") + "</td>" +
+        "<td>" + esc(s.guessed_name) + "</td>" +
+        "<td>" + esc(s.category) + "</td>" +
+        "<td>" + esc(s.confidence) + "</td>" +
+        "<td>" + checkBadge(s.check) + "</td>" +
+        "<td>" + esc(s.summary) + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    if (!filtered.length) html += '<div class="na">no rows match filters</div>';
+    return html;
+  }
+
+  function renderNotes(target) {
+    if (!target.notes_available || target.notes_md == null) {
+      return '<div class="na">not available yet</div>';
+    }
+    return '<div class="notes-body">' + highlightConfidenceWords(renderMd(target.notes_md)) + "</div>";
+  }
+
+  function findMethodRecord(target, exportedFile) {
+    if (!target || !exportedFile) return null;
+    const fromFn = (target.functions || []).find((f) => f.exported_file === exportedFile);
+    if (fromFn) return fromFn;
+    const fromSum = (target.summaries || []).find((s) => s.exported_file === exportedFile);
+    if (fromSum) {
+      return {
+        exported_file: exportedFile,
+        method: fromSum.function,
+        class: "",
+        label_status: fromSum.check || "not_labeled",
+        category: fromSum.category,
+        guessed_name: fromSum.guessed_name,
+        summary: fromSum.summary,
+        confidence: fromSum.confidence,
+        calls: fromSum.calls,
+        evidence: fromSum.evidence,
+        check: fromSum.check,
+      };
+    }
+    return { exported_file: exportedFile, label_status: "not_labeled" };
+  }
+
+  function highlightEvidenceInSource(text, evidence) {
+    if (!text) return { html: '<div class="na">not available yet</div>', found: false };
+    const lines = text.split("\n");
+    let found = false;
+    let ev = evidence || "";
+    // Try exact, then trimmed collapsed-whitespace match per line/span
+    let matchStart = -1, matchEnd = -1;
+    if (ev) {
+      matchStart = text.indexOf(ev);
+      if (matchStart < 0) {
+        const collapsed = ev.replace(/\s+/g, " ").trim();
+        const collapsedText = text.replace(/\s+/g, " ");
+        // Fall back: search original lines for substring of evidence
+        const needle = collapsed.slice(0, Math.min(80, collapsed.length));
+        if (needle) {
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes(ev.trim()) || lines[i].replace(/\s+/g, " ").includes(needle)) {
+              // mark whole line
+              matchStart = text.split("\n").slice(0, i).join("\n").length + (i > 0 ? 1 : 0);
+              matchEnd = matchStart + lines[i].length;
+              found = true;
+              break;
+            }
+          }
+        }
+      } else {
+        matchEnd = matchStart + ev.length;
+        found = true;
+      }
+    }
+
+    // Build line-based view with optional highlight spanning lines
+    let html = '<div class="src"><table><tbody>';
+    let offset = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineStart = offset;
+      const lineEnd = offset + line.length;
+      let cell;
+      if (found && matchStart < lineEnd && matchEnd > lineStart) {
+        const a = Math.max(0, matchStart - lineStart);
+        const b = Math.min(line.length, matchEnd - lineStart);
+        cell =
+          esc(line.slice(0, a)) +
+          '<span class="hl-evidence">' + esc(line.slice(a, b)) + "</span>" +
+          esc(line.slice(b));
+      } else {
+        cell = esc(line);
+      }
+      html +=
+        "<tr><td class='ln'>" + (i + 1) + "</td><td class='code'>" + cell + "</td></tr>";
+      offset = lineEnd + 1; // +1 for newline
+    }
+    html += "</tbody></table></div>";
+    return { html, found };
+  }
+
+  async function openDetail(targetName, exportedFile) {
+    if (!exportedFile) return;
+    ui.detail = { target: targetName, exported_file: exportedFile };
+    document.getElementById("drawer").classList.add("open");
+    document.getElementById("drawer").setAttribute("aria-hidden", "false");
+    document.getElementById("drawer-backdrop").classList.add("open");
+    document.getElementById("drawer-title").textContent = exportedFile;
+    document.getElementById("drawer-source").innerHTML = '<div class="na">loading…</div>';
+    renderDrawerLabel();
+    // re-render target table selection without full flash if possible
+    if (lastState) renderTargets(lastState);
+
+    try {
+      const url = "/api/source?target=" + encodeURIComponent(targetName) +
+        "&file=" + encodeURIComponent(exportedFile);
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      if (!data.ok) {
+        document.getElementById("drawer-source").innerHTML =
+          '<div class="na">' + esc(data.error || "not available yet") + "</div>";
+        ui.detailSource = null;
+      } else {
+        ui.detailSource = { file: exportedFile, text: data.text };
+        renderDrawerSource();
+      }
+    } catch (e) {
+      document.getElementById("drawer-source").innerHTML =
+        '<div class="na">not available yet</div>';
+    }
+  }
+
+  function closeDetail() {
+    ui.detail = null;
+    ui.detailSource = null;
+    document.getElementById("drawer").classList.remove("open");
+    document.getElementById("drawer").setAttribute("aria-hidden", "true");
+    document.getElementById("drawer-backdrop").classList.remove("open");
+    if (lastState) renderTargets(lastState);
+  }
+
+  function renderDrawerLabel() {
+    if (!ui.detail || !lastState) {
+      document.getElementById("drawer-label").innerHTML = '<div class="na">not available yet</div>';
+      return;
+    }
+    const target = (lastState.targets || []).find((t) => t.name === ui.detail.target);
+    const rec = findMethodRecord(target, ui.detail.exported_file);
+    if (!rec) {
+      document.getElementById("drawer-label").innerHTML = '<div class="na">not available yet</div>';
+      return;
+    }
+    const status = rec.label_status || rec.check || "not_labeled";
+    let calls = rec.calls;
+    if (Array.isArray(calls)) calls = calls.join(", ");
+    let html = "<h3>Label</h3>";
+    html += '<div class="label-block"><div class="k">status</div><div class="v">' + checkBadge(status, String(status).replace("_", " ")) + "</div></div>";
+    html += '<div class="label-block"><div class="k">class / method</div><div class="v">' + esc(rec.class || "—") + " · " + esc(rec.method || "—") + "</div></div>";
+    html += '<div class="label-block"><div class="k">guessed name</div><div class="v">' + esc(rec.guessed_name || "—") + "</div></div>";
+    html += '<div class="label-block"><div class="k">category</div><div class="v">' + esc(rec.category || "—") + "</div></div>";
+    html += '<div class="label-block"><div class="k">confidence</div><div class="v">' + esc(rec.confidence || "—") + "</div></div>";
+    html += '<div class="label-block"><div class="k">summary</div><div class="v">' + esc(rec.summary || "—") + "</div></div>";
+    html += '<div class="label-block"><div class="k">calls</div><div class="v">' + esc(calls == null || calls === "" ? "—" : calls) + "</div></div>";
+    html += '<div class="label-block"><div class="k">evidence</div><div class="v" id="drawer-evidence">' + esc(rec.evidence || "—") + "</div></div>";
+    document.getElementById("drawer-label").innerHTML = html;
+  }
+
+  function renderDrawerSource() {
+    if (!ui.detail) return;
+    const target = lastState && (lastState.targets || []).find((t) => t.name === ui.detail.target);
+    const rec = findMethodRecord(target, ui.detail.exported_file);
+    const evidence = rec && rec.evidence ? rec.evidence : "";
+    const status = (rec && (rec.label_status || rec.check)) || "";
+    if (!ui.detailSource || ui.detailSource.file !== ui.detail.exported_file) {
+      document.getElementById("drawer-source").innerHTML = '<div class="na">loading…</div>';
+      return;
+    }
+    const { html, found } = highlightEvidenceInSource(ui.detailSource.text, evidence);
+    let note = "";
+    if (evidence && !found && String(status).toLowerCase() === "unverified") {
+      note =
+        '<div class="evidence-note">Evidence quote was not found verbatim in the source ' +
+        "(unverified). Quote shown in the label panel.</div>";
+    } else if (evidence && !found) {
+      note = '<div class="evidence-note">Evidence quote not found in this source file.</div>';
+    }
+    document.getElementById("drawer-source").innerHTML = "<h3>Source</h3>" + note + html;
+  }
+
+  function renderTargets(state) {
+    const targets = state.targets || [];
+    const tabs = document.getElementById("target-tabs");
+    const subs = document.getElementById("target-subs");
+    const no = document.getElementById("no-targets");
+
+    if (!targets.length) {
+      tabs.innerHTML = "";
+      subs.innerHTML = "";
+      no.style.display = "block";
+      return;
+    }
+    no.style.display = "none";
+
+    if (!ui.activeTarget || !targets.some((t) => t.name === ui.activeTarget)) {
+      ui.activeTarget = targets[0].name;
+    }
+
+    tabs.innerHTML = targets
+      .map((t) => {
+        const mode = (t.mode || "unknown").toLowerCase();
+        return (
+          '<button type="button" class="tab' + (t.name === ui.activeTarget ? " active" : "") +
+          '" data-target="' + esc(t.name) + '">' + esc(t.name) +
+          '<span class="badge ' + esc(mode) + '">' + esc(t.mode || "unknown") + "</span></button>"
+        );
+      })
+      .join("") +
+      '<button type="button" id="reset-btn" class="reset-btn" title="Back up then clear this target\'s labeler outputs (status.json, summaries.jsonl, functions/). candidates.json and notes.md are kept. A reversible backup is saved under the target\'s backups/ folder.">Reset ' +
+      esc(ui.activeTarget) + " analysis</button>";
+
+    const t = targets.find((x) => x.name === ui.activeTarget) || targets[0];
+    const subNames = [
+      ["candidates", "Candidates"],
+      ["functions", "Functions"],
+      ["summaries", "Summaries"],
+      ["notes", "Notes"],
+    ];
+    if (!subNames.some(([k]) => k === ui.subTab)) ui.subTab = "candidates";
+
+    let body = "";
+    if (ui.subTab === "candidates") body = renderCandidates(t);
+    else if (ui.subTab === "functions") body = renderFunctions(t);
+    else if (ui.subTab === "summaries") body = renderSummaries(t);
+    else body = renderNotes(t);
+
+    subs.innerHTML =
+      renderLabelerPanel(t) +
+      '<div class="subtabs" id="subtabs">' +
+      subNames
+        .map(
+          ([k, label]) =>
+            '<button type="button" class="subtab' + (ui.subTab === k ? " active" : "") +
+            '" data-sub="' + k + '">' + label + "</button>"
+        )
+        .join("") +
+      "</div>" +
+      '<div id="sub-body">' + body + "</div>";
+
+    tabs.querySelectorAll(".tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        captureUiFromDom();
+        ui.activeTarget = btn.getAttribute("data-target");
+        renderTargets(lastState);
+      });
+    });
+
+    const resetBtn = document.getElementById("reset-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => doReset(ui.activeTarget));
+    }
+
+    document.getElementById("subtabs").querySelectorAll(".subtab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        captureUiFromDom();
+        ui.subTab = btn.getAttribute("data-sub");
+        renderTargets(lastState);
+      });
+    });
+
+    const candWrap = document.getElementById("sub-body");
+    if (candWrap && ui.subTab === "candidates") {
+      candWrap.querySelectorAll("th[data-sort]").forEach((th) => {
+        th.addEventListener("click", () => {
+          const key = th.getAttribute("data-sort");
+          if (ui.candSort.key === key) ui.candSort.dir *= -1;
+          else {
+            ui.candSort.key = key;
+            ui.candSort.dir = key === "file" ? 1 : -1;
+          }
+          renderTargets(lastState);
+        });
+      });
+    }
+
+    if (ui.subTab === "functions") {
+      ["fn-class", "fn-category", "fn-status"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("change", () => {
+          captureUiFromDom();
+          renderTargets(lastState);
+        });
+      });
+      document.querySelectorAll("tr.fn-row").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          openDetail(t.name, tr.getAttribute("data-file"));
+        });
+      });
+    }
+
+    if (ui.subTab === "summaries") {
+      ["flt-category", "flt-confidence", "flt-check"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("change", () => {
+          captureUiFromDom();
+          renderTargets(lastState);
+        });
+      });
+      document.querySelectorAll("tr.sum-row").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          const file = tr.getAttribute("data-file");
+          if (file) openDetail(t.name, file);
+        });
+      });
+    }
+
+    // Keep drawer label in sync with fresh state
+    if (ui.detail) {
+      renderDrawerLabel();
+      if (ui.detailSource && ui.detailSource.file === ui.detail.exported_file) {
+        renderDrawerSource();
+      }
+    }
+  }
+
+  function render(state) {
+    captureUiFromDom();
+    const scrollY = window.scrollY;
+    const actList = document.getElementById("activity-list");
+    const actScroll = actList ? actList.scrollTop : 0;
+    const drawerSrc = document.getElementById("drawer-source");
+    const drawerScroll = drawerSrc ? drawerSrc.scrollTop : 0;
+    lastState = state;
+    renderStatusBar(state);
+    renderTargets(state);
+    renderActivity(state);
+    renderSetup(state);
+    window.scrollTo(0, scrollY);
+    const actList2 = document.getElementById("activity-list");
+    if (actList2) actList2.scrollTop = actScroll;
+    const drawerSrc2 = document.getElementById("drawer-source");
+    if (drawerSrc2) drawerSrc2.scrollTop = drawerScroll;
+  }
+
+  function doReset(name) {
+    if (!name) return;
+    const msg =
+      'Reset "' + name + '" analysis?\n\n' +
+      "This backs up and then clears its labeler outputs (status.json, " +
+      "summaries.jsonl, exported functions). candidates.json and notes.md are kept.\n\n" +
+      "A reversible backup is saved under targets/" + name + "/backups/. Continue?";
+    if (!window.confirm(msg)) return;
+    fetch("/api/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: name }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res && res.ok) {
+          const moved = (res.moved && res.moved.length) ? res.moved.join(", ") : "nothing to clear";
+          window.alert("Reset done (" + moved + ").\nBackup: " + (res.backup || "(none)"));
+          poll();
+        } else {
+          window.alert("Reset failed: " + ((res && res.error) || "unknown error"));
+        }
+      })
+      .catch((e) => window.alert("Reset request failed: " + e));
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch("/api/state", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const state = await res.json();
+      render(state);
+    } catch (err) {
+      document.getElementById("ollama-dot").className = "dot red";
+      document.getElementById("ollama-text").textContent = "dashboard fetch failed";
+      document.getElementById("generated-at").textContent = "error";
+    }
+  }
+
+  document.getElementById("setup-details").addEventListener("toggle", (e) => {
+    ui.setupOpen = e.target.open;
+  });
+  document.getElementById("drawer-close").addEventListener("click", closeDetail);
+  document.getElementById("drawer-backdrop").addEventListener("click", closeDetail);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && ui.detail) closeDetail();
+  });
+
+  poll();
+  setInterval(poll, POLL_MS);
+})();
+</script>
+</body>
+</html>
